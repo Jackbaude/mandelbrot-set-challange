@@ -1,5 +1,5 @@
 # Threaded Mandelbrot Set Challenge
-![Fractal](fractal1.png)
+![Fractal](fractal4.png)
 
 To run `cargo run -- -h 1920 -w 1920 -t 16 -f fractal2`
 ```

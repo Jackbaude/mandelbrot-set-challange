@@ -4,7 +4,7 @@ use structopt::StructOpt;
 
 use std::thread;
 use std::sync::{mpsc};
-use image::{Rgb};
+use image::{Rgb, Pixel};
 
 
 use std::sync::mpsc::{Sender, Receiver};
@@ -37,24 +37,36 @@ struct ColumnResult {
 }
 
 // The task that is being threaded
-fn compute_column(column_number: i32, scale_x: f32, scale_y: f32, height: u32) -> ColumnResult {
+fn compute_column(column_number: i32, height: u32, width: u32) -> ColumnResult {
     let mut column_pixels = vec![];
+    let cx = -0.9;
+    let cy = 0.27015;
+    let iterations = 1000;
 
     for y in 0..height {
-        let cx = y as f32 * scale_x - 1.5;
-        let cy = column_number as f32 * scale_y - 1.5;
+        let inner_height = height as f32;
+        let inner_width = width as f32;
+        let inner_y = y as f32;
+        let inner_x = column_number as f32;
 
-        let c = num_complex::Complex::new(-0.4, 0.6);
-        let mut z = num_complex::Complex::new(cx, cy);
+        let mut zx = 3.0 * (inner_x - 0.5 * inner_width) / (inner_width);
+        let mut zy = 2.0 * (inner_y - 0.5 * inner_height) / (inner_height);
 
-        let mut i: f64 = 0.0;
+        let mut i = iterations;
 
-        while i < 255.0 && z.norm() <= 40.0 {
-            z = z * z  + c;
-            i += 0.5;
+        while zx * zx + zy * zy < 4.0 && i > 1 {
+            let tmp = zx * zx - zy * zy + cx;
+            zy = 2.0 * zx * zy + cy;
+            zx = tmp;
+            i -= 1;
         }
 
-        let pixel = Rgb([0, i as u8, i as u8]);
+        // guesswork to make the rgb color values look okay
+        let r = (i << 3) as u8;
+        let g = (i << 5) as u8;
+        let b = (i * 4) as u8;
+        let pixel = Rgb::from_channels(r, g, b, 0);
+
         column_pixels.push(pixel);
     }
 
@@ -70,8 +82,6 @@ fn main() {
     let nthreads = args.threads;
     let img_x = args.width;
     let img_y = args.height;
-    let scale_x: f32 = 3.0 / img_x as f32;
-    let scale_y: f32 = 3.0 / img_x as f32;
     let file_name = args.file_name;
 
     let (writer, reader): (Sender<ColumnResult>, Receiver<ColumnResult>) = mpsc::channel();
@@ -86,7 +96,7 @@ fn main() {
         thread::spawn(move || {
             // Each thread queues a message in the channel
             for col in n*c..(n + 1)*c  {
-                channel.send(compute_column((col) as i32, scale_x, scale_y, img_y)).unwrap();
+                channel.send(compute_column((col) as i32,  img_y, img_x)).unwrap();
             }
         });
     }
